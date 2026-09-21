@@ -1,0 +1,23 @@
+{
+  "name": "dotlas",
+  "version": "0.1.0",
+  "description": "A minimalist dot-map photo album — a generative stipple world map design concept",
+  "type": "module",
+  "scripts": {
+    "build": "node src/generate.mjs",
+    "preview": "python3 scripts/preview.py"
+  },
+  "keywords": [
+    "stipple",
+    "dot-map",
+    "halftone",
+    "cartography",
+    "generative-art",
+    "svg",
+    "design",
+    "minimalism"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
