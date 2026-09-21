@@ -229,7 +229,7 @@ function buildInset(rings, dashSvg = "") {
   }
 
   const frame = `<rect x="0" y="0" width="${INSET.width}" height="${proj.height.toFixed(1)}" fill="none" stroke="#1A2B4C" stroke-opacity="0.38" stroke-width="1" stroke-dasharray="0.1 4.6" stroke-linecap="round"/>`;
-  const label = `<text x="9" y="17" font-size="12" letter-spacing="3" fill="#1A2B4C" fill-opacity="0.55">南海诸岛</text>`;
+  const label = `<text x="${(INSET.width - 8).toFixed(1)}" y="${(proj.height - 8).toFixed(1)}" text-anchor="end" font-size="12" letter-spacing="3" fill="#1A2B4C" fill-opacity="0.55">南海诸岛</text>`;
   const dotsSvg = `<g fill="${mixHex(0.55)}">` +
     dots.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.1"/>`).join("") +
     `</g>`;
