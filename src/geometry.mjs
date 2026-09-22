@@ -134,6 +134,78 @@ export function distanceField(isZero, gw = GW, gh = GH, cell = CELL) {
   return d;
 }
 
+function unwrapRing(ring) {
+  const out = [[ring[0][0], ring[0][1]]];
+  for (let i = 1; i < ring.length; i++) {
+    let lon = ring[i][0];
+    const prev = out[i - 1][0];
+    while (lon - prev > 180) lon -= 360;
+    while (lon - prev < -180) lon += 360;
+    out.push([lon, ring[i][1]]);
+  }
+  return out;
+}
+
+function clipLon(ring, S, keepLess) {
+  const out = [];
+  const inside = (lon) => (keepLess ? lon <= S : lon >= S);
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const ina = inside(a[0]), inb = inside(b[0]);
+    if (ina) out.push(a);
+    if (ina !== inb) {
+      const t = (S - a[0]) / (b[0] - a[0]);
+      out.push([S, a[1] + t * (b[1] - a[1])]);
+    }
+  }
+  return out;
+}
+
+function normalizeRing(ring) {
+  for (const off of [0, 360, -360]) {
+    let min = 1e9, max = -1e9;
+    for (const [lon] of ring) {
+      min = Math.min(min, lon + off); max = Math.max(max, lon + off);
+    }
+    if (min >= -180 && max <= 180) {
+      return ring.map(([lon, lat]) => [lon + off, lat]);
+    }
+  }
+  return null;
+}
+
+export function splitAntimeridianRings(rings) {
+  const out = [];
+  for (const ring of rings) {
+    const u = unwrapRing(ring);
+    let min = 1e9, max = -1e9;
+    for (const [lon] of u) {
+      min = Math.min(min, lon); max = Math.max(max, lon);
+    }
+    if (max - min < 1e-9) continue;
+    let parts = [u];
+    for (let S = 180 + 360 * Math.ceil((min - 180) / 360); S < max; S += 360) {
+      const next = [];
+      for (const part of parts) {
+        let pMin = 1e9, pMax = -1e9;
+        for (const [lon] of part) { pMin = Math.min(pMin, lon); pMax = Math.max(pMax, lon); }
+        if (pMin < S && pMax > S) {
+          next.push(clipLon(part, S, true), clipLon(part, S, false));
+        } else {
+          next.push(part);
+        }
+      }
+      parts = next;
+    }
+    for (const part of parts) {
+      if (part.length < 3) continue;
+      const n = normalizeRing(part);
+      if (n) out.push(n);
+    }
+  }
+  return out;
+}
+
 export function snapToLand(land, x, y, gw = GW, gh = GH, cell = CELL) {
   const gi = Math.floor(x / cell), gj = Math.floor(y / cell);
   if (land[gj * gw + gi]) return [x, y];

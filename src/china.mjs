@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import {
   makeEquirect, ringsToEdges, fillScanlines, geojsonRings, distanceField,
 } from "./geometry.mjs";
-import { sampleDotsGrid, dotsColorGroups, buildAccents, ridgeLineSvg, mixHex } from "./stipple.mjs";
+import { sampleDotsGrid, dotsColorGroups, buildAccents, ridgeLineSvg, mixHex, ensureComponentDots, ensureRingDots } from "./stipple.mjs";
 import { CHINA_PLACES, CHINA_RIDGES } from "./content.mjs";
 
 export const CHINA_WINDOW = { lon0: 73, lon1: 135.5, latTop: 54.5, latBot: 15.5, phi0: 35, width: 1000 };
@@ -146,6 +146,14 @@ export function buildChina() {
     land, distCoast,
     ...CHINA_DOTS,
   });
+  dots.push(...ensureComponentDots(dots, {
+    gw, gh, cell, land, distCoast,
+    spacing: CHINA_DOTS.spacing, coastFade: CHINA_DOTS.coastFade,
+  }));
+  dots.push(...ensureRingDots(dots, rings, proj, {
+    gw, gh, cell, distCoast,
+    spacing: CHINA_DOTS.spacing, coastFade: CHINA_DOTS.coastFade,
+  }));
 
   const provinces = loadProvinces(proj);
   const provOf = dots.map((d) => provinceAt(provinces, d.x, d.y));

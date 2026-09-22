@@ -1,19 +1,27 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import {
   MAP_W, MAP_H, GW, GH, CELL, px, py,
-  decodeRings, rasterizeLand, distanceField,
+  decodeRings, splitAntimeridianRings, rasterizeLand, distanceField,
 } from "./geometry.mjs";
-import { sampleDots, dotsToSvg, ridgeLineSvg, mixHex, clamp01, buildAccents } from "./stipple.mjs";
+import { sampleDots, DOT_SPACING, dotsToSvg, ridgeLineSvg, mixHex, clamp01, buildAccents, ensureComponentDots, ensureRingDots } from "./stipple.mjs";
 import { CARDS, CARDS_ENABLED, PLACES, RIDGES, renderCardsHtml } from "./content.mjs";
 import { buildChina } from "./china.mjs";
 import { renderPage } from "./template.mjs";
 
 const topo = JSON.parse(readFileSync(new URL("../data/land-110m.json", import.meta.url), "utf8"));
-const rings = decodeRings(topo);
+const rings = splitAntimeridianRings(decodeRings(topo));
 const land = rasterizeLand(rings);
 const distCoast = distanceField((i) => !land[i]);
 
 const dots = sampleDots(land, distCoast);
+dots.push(...ensureComponentDots(dots, {
+  gw: GW, gh: GH, cell: CELL, land, distCoast,
+  spacing: DOT_SPACING, coastFade: 26,
+}));
+dots.push(...ensureRingDots(dots, rings, { px, py }, {
+  gw: GW, gh: GH, cell: CELL, distCoast,
+  spacing: DOT_SPACING, coastFade: 26,
+}));
 const dotSvg = dotsToSvg(dots);
 const ridgeSvg = ridgeLineSvg(RIDGES, { px, py });
 const { accents, svg: accentSvg } = buildAccents(PLACES, land);

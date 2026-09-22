@@ -60,6 +60,97 @@ export function ridgeLineSvg(lines, proj, { width = 1.4, gap = 5, opacity = 0.28
     .join("");
 }
 
+export function ensureComponentDots(dots, { gw, gh, cell, land, distCoast, spacing, coastFade, sizeRatio = 0.3 }) {
+  const comp = new Int32Array(gw * gh).fill(-1);
+  const comps = [];
+  const stack = [];
+  for (let i0 = 0; i0 < gw * gh; i0++) {
+    if (!land[i0] || comp[i0] !== -1) continue;
+    const id = comps.length;
+    const cells = [];
+    comp[i0] = id;
+    stack.push(i0);
+    while (stack.length) {
+      const c = stack.pop();
+      cells.push(c);
+      const ci = c % gw, cj = (c / gw) | 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const ni = ci + di, nj = cj + dj;
+          if (ni < 0 || ni >= gw || nj < 0 || nj >= gh) continue;
+          const n = nj * gw + ni;
+          if (land[n] && comp[n] === -1) { comp[n] = id; stack.push(n); }
+        }
+      }
+    }
+    comps.push(cells);
+  }
+  const has = new Set();
+  for (const d of dots) {
+    const gi = Math.min(gw - 1, Math.max(0, Math.floor(d.x / cell)));
+    const gj = Math.min(gh - 1, Math.max(0, Math.floor(d.y / cell)));
+    const id = comp[gj * gw + gi];
+    if (id >= 0) has.add(id);
+  }
+  const extra = [];
+  const R = spacing * sizeRatio;
+  for (let id = 0; id < comps.length; id++) {
+    if (has.has(id)) continue;
+    const cells = comps[id];
+    let sx = 0, sy = 0;
+    for (const c of cells) { sx += c % gw; sy += (c / gw) | 0; }
+    const cx = sx / cells.length, cy = sy / cells.length;
+    let best = -1, bd = 1e9;
+    for (const c of cells) {
+      const d = ((c % gw) - cx) ** 2 + (((c / gw) | 0) - cy) ** 2;
+      if (d < bd) { bd = d; best = c; }
+    }
+    const gi = best % gw, gj = (best / gw) | 0;
+    const t = clamp01(0.15 + 0.85 * Math.min(1, distCoast[best] / coastFade));
+    extra.push({
+      x: Math.round((gi + 0.5) * cell * 10) / 10,
+      y: Math.round((gj + 0.5) * cell * 10) / 10,
+      r: Math.round(R * 100) / 100,
+      t,
+    });
+  }
+  return extra;
+}
+
+export function ensureRingDots(dots, rings, proj, { gw, gh, cell, distCoast, spacing, coastFade, sizeRatio = 0.3 }) {
+  const extra = [];
+  const limit = (spacing * 3) ** 2;
+  const near = (spacing * 0.8) ** 2;
+  for (const ring of rings) {
+    let cx = 0, cy = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const [lon, lat] of ring) {
+      const X = proj.px(lon), Y = proj.py(lat);
+      cx += X; cy += Y;
+      if (X < x0) x0 = X; if (X > x1) x1 = X;
+      if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
+    }
+    cx /= ring.length; cy /= ring.length;
+    if (cx < 0 || cx > proj.width || cy < 0 || cy > proj.height) continue;
+    if ((x1 - x0) ** 2 + (y1 - y0) ** 2 > limit) continue;
+    let close = false;
+    for (const d of [...dots, ...extra]) {
+      if ((d.x - cx) ** 2 + (d.y - cy) ** 2 < near) { close = true; break; }
+    }
+    if (close) continue;
+    const gi = Math.floor(cx / cell), gj = Math.floor(cy / cell);
+    const idx = gi >= 0 && gi < gw && gj >= 0 && gj < gh ? gj * gw + gi : -1;
+    const isLand = idx >= 0 && distCoast[idx] > 0;
+    const t = isLand ? clamp01(0.15 + 0.85 * Math.min(1, distCoast[idx] / coastFade)) : 0.25;
+    extra.push({
+      x: Math.round(cx * 10) / 10,
+      y: Math.round(cy * 10) / 10,
+      r: Math.round(spacing * sizeRatio * 100) / 100,
+      t,
+    });
+  }
+  return extra;
+}
+
 export function dotsColorGroups(dots) {
   const NB = COLOR_STEPS;
   const groups = Array.from({ length: NB }, () => []);
