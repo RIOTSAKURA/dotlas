@@ -3,7 +3,7 @@ import {
   makeEquirect, ringsToEdges, fillScanlines, geojsonRings, distanceField,
 } from "./geometry.mjs";
 import { sampleDotsGrid, dotsColorGroups, buildAccents, ridgeLineSvg, mixHex, ensureComponentDots, ensureRingDots } from "./stipple.mjs";
-import { CHINA_PLACES, CHINA_RIDGES } from "./content.mjs";
+import { CHINA_PLACES, CHINA_RIDGES, CARDS } from "./content.mjs";
 
 export const CHINA_WINDOW = { lon0: 73, lon1: 135.5, latTop: 54.5, latBot: 15.5, phi0: 35, width: 1000 };
 export const CHINA_GRID_W = 1400;
@@ -35,7 +35,7 @@ function loadProvinces(proj) {
     }
     const cx = ((bx0 + bx1) / 2 / proj.width) * 100;
     const cy = ((by0 + by1) / 2 / proj.height) * 100;
-    out.push({ name, rings, origin: `${cx.toFixed(2)}% ${cy.toFixed(2)}%` });
+    out.push({ name, rings, origin: `${cx.toFixed(2)}% ${cy.toFixed(2)}%`, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 } });
   }
   return out;
 }
@@ -128,6 +128,21 @@ function nineDashSvg(proj, insetProj) {
   return { main: main.join(""), inset: inset.join("") };
 }
 
+function pickMarkers(list, count) {
+  if (list.length <= count) return list.map((d) => [d.x, d.y]);
+  const picked = [[list[0].x, list[0].y]];
+  while (picked.length < count) {
+    let best = null, bd = -1;
+    for (const d of list) {
+      let md = 1e9;
+      for (const [px, py] of picked) md = Math.min(md, (d.x - px) ** 2 + (d.y - py) ** 2);
+      if (md > bd) { bd = md; best = [d.x, d.y]; }
+    }
+    picked.push(best);
+  }
+  return picked;
+}
+
 export function buildChina() {
   const proj = makeEquirect(CHINA_WINDOW);
   const gw = CHINA_GRID_W;
@@ -179,9 +194,27 @@ export function buildChina() {
     .map((p) => {
       const list = byProv.get(p.name);
       if (!list) return "";
-      return `<svg class="pv" data-p="${p.name}" aria-hidden="true" viewBox="0 0 1000 ${h}" style="transform-origin:${p.origin}">${dotsColorGroups(list)}</svg>`;
+      const b = p.bbox;
+      const attrs = `data-cx="${((b.x0 + b.x1) / 2).toFixed(1)}" data-cy="${((b.y0 + b.y1) / 2).toFixed(1)}" data-w="${(b.x1 - b.x0).toFixed(1)}" data-h="${(b.y1 - b.y0).toFixed(1)}"`;
+      return `<svg class="pv" data-p="${p.name}" ${attrs} aria-hidden="true" viewBox="0 0 1000 ${h}" style="transform-origin:${p.origin}">${dotsColorGroups(list)}</svg>`;
     })
     .join("");
+
+  let cardIdx = 0;
+  const markerGroups = provinces
+    .map((p) => {
+      const list = byProv.get(p.name);
+      if (!list) return "";
+      const marks = pickMarkers(list, 3)
+        .map(([x, y]) => {
+          const ci = cardIdx++ % CARDS.length;
+          return `<g class="mk" data-card="${ci}"><circle class="halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#1A2B4C" opacity="0.05"/><circle class="ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.2" fill="none" stroke="#1A2B4C" stroke-width="1"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="#1A2B4C"/></g>`;
+        })
+        .join("");
+      return `<g class="mks" data-p="${p.name}">${marks}</g>`;
+    })
+    .join("");
+  const markersSvg = `<svg class="cn-markers" aria-hidden="true" viewBox="0 0 1000 ${h}">${markerGroups}</svg>`;
 
   const hitSvg = `<svg class="cn-hit" aria-hidden="true" viewBox="0 0 1000 ${h}">` +
     provinces.map((p) => {
@@ -193,7 +226,7 @@ export function buildChina() {
   const { accents, svg: accentMarks } = buildAccents(CHINA_PLACES, land, proj, gw, gh, cell, ACCENT_SCALE);
   const accentsSvg = `<svg class="cn-accents" aria-hidden="true" viewBox="0 0 1000 ${h}">${accentMarks}</svg>`;
 
-  const svg = baseSvg + provSvgs + hitSvg + accentsSvg;
+  const svg = baseSvg + provSvgs + hitSvg + markersSvg + accentsSvg;
   return { proj, land, gw, gh, cell, dots, accents, svg, inset };
 }
 

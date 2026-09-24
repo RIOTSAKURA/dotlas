@@ -1,4 +1,4 @@
-export function renderPage({ mapH, dotSvg, ridgeSvg, accentSvg, cardsHtml, dotCount, china }) {
+export function renderPage({ mapH, dotSvg, ridgeSvg, accentSvg, cardsHtml, dotCount, china, photoPops }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -29,13 +29,26 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
 .map{left:20%;top:27.2%;width:60%;opacity:0}
 .map-cn{left:24%;top:13%;width:52%;opacity:1;animation:settle 1.15s cubic-bezier(.22,1,.36,1) backwards}
 .map svg,.map-cn svg{display:block;width:100%;height:auto;overflow:visible}
-.map-cn .cn-base{display:block;width:100%;height:auto;overflow:visible}
-.map-cn .pv{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;transition:transform .3s cubic-bezier(.22,1,.36,1)}
-.map-cn .pv.lift{transform:translateY(-12px) scale(1.06);filter:drop-shadow(0 9px 16px rgba(26,43,76,.28)) drop-shadow(0 22px 40px rgba(26,43,76,.12))}
-.map-cn .pv.lift > g{fill:#1A2B4C}
-.map-cn .pv.lift circle{stroke:#F9F8F6;stroke-width:1.2;paint-order:stroke}
+.cn-stage{position:relative;display:block;width:100%;transition:transform .65s cubic-bezier(.22,1,.36,1)}
+.map-cn .cn-base{display:block;width:100%;height:auto;overflow:visible;transition:opacity .5s ease}
+.map-cn .pv{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .5s ease}
+.map-cn .pv.lift{transform:translateY(-12px) scale(1.06)}
+.map-cn .pv.lift > g,.map-cn .pv.active > g{fill:#1A2B4C}
+.map-cn .pv.lift circle,.map-cn .pv.active circle{stroke:#F9F8F6;stroke-width:1.2;paint-order:stroke}
 .map-cn .cn-hit{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-.map-cn .cn-hit .hit{fill:transparent;pointer-events:fill}
+.map-cn .cn-hit .hit{fill:transparent;pointer-events:fill;cursor:pointer}
+.map-cn .cn-markers{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;opacity:0;transition:opacity .4s ease}
+.map-cn .cn-markers .mks{display:none}
+.map-cn .cn-markers .mk{cursor:pointer}
+.map-cn .cn-accents{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;transition:opacity .5s ease}
+.cn-stage.zoomed .pv:not(.active){opacity:0.13}
+.cn-stage.zoomed .cn-base{opacity:0.22}
+.cn-stage.zoomed .cn-accents{opacity:0}
+.cn-stage.zoomed .cn-markers{opacity:1;pointer-events:auto}
+.cn-stage.zoomed .cn-markers .mks.on{display:block}
+.photo-pop{position:absolute;inset:0;pointer-events:none;z-index:3}
+.photo-pop .card{opacity:0;transition:opacity .35s ease;left:0;top:0;animation:none}
+.photo-pop .card.on{opacity:1}
 .map-cn .cn-accents{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .map .ring,.map-cn .ring{transform-box:fill-box;transform-origin:center;animation:pulse 4.6s cubic-bezier(.45,0,.55,1) infinite;animation-delay:var(--d,0s)}
 @keyframes pulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.12;transform:scale(1.5)}}
@@ -59,7 +72,7 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
 .hint .wheel{width:.92cqw;height:1.5cqw;border:1px solid rgba(26,43,76,.42);border-radius:.46cqw;position:relative;overflow:hidden;flex:none}
 .hint .wheel i{position:absolute;left:50%;top:.16cqw;width:.24cqw;height:.24cqw;margin-left:-.12cqw;border-radius:50%;background:rgba(26,43,76,.55);animation:wheelDot 1.9s ease-in-out infinite}
 @keyframes wheelDot{0%{transform:translateY(0);opacity:0}30%{opacity:1}65%{transform:translateY(.75cqw);opacity:1}100%{transform:translateY(.75cqw);opacity:0}}
-@media (prefers-reduced-motion:reduce){.card,.map .ring,.map-cn .ring,.hint .wheel i{animation:none}.map-cn{animation:none}.map-cn .pv{transition:none}}
+@media (prefers-reduced-motion:reduce){.card,.map .ring,.map-cn .ring,.map-cn .cn-markers .ring,.hint .wheel i{animation:none}.map-cn{animation:none}.map-cn .pv{transition:none}.cn-stage{transition:none}}
 </style>
 </head>
 <body>
@@ -84,10 +97,15 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
     </svg>
   </div>
   <div class="map-cn" id="mapChina" role="img" aria-label="Map of China drawn in stippled dots, denser and darker inland">
+    <div class="cn-stage" id="cnStage">
     ${china.svg}
+    </div>
   </div>
   <div class="cards" id="cards">
       ${cardsHtml}
+  </div>
+  <div class="photo-pop" id="photoPops">
+      ${photoPops}
   </div>
   <div class="hint" id="hint"><span class="wheel"><i></i></span><span>Scroll — zoom out to the world</span></div>
   <div class="fig"><span class="a">Fig. 01 — China in ${china.dotCount.toLocaleString("en-US")} Points</span><span class="b">Fig. 02 — The World in ${dotCount.toLocaleString("en-US")} Points</span></div>
@@ -107,6 +125,7 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
 
   let z = 0, zt = 0, last = performance.now(), idle = 0, dismissed = false;
   let unlift = () => {};
+  let zoomed = null;
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -118,10 +137,11 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
     world.style.transform = "scale(" + (0.94 + 0.06 * fw).toFixed(4) + ")";
     world.setAttribute("aria-hidden", fw < 0.5 ? "true" : "false");
     world.style.pointerEvents = fw > 0.5 ? "" : "none";
+    if (fw > 0.5 && zoomed) unzoom();
     cn.style.opacity = (1 - fc).toFixed(3);
     cn.style.transform = "scale(" + (1 - 0.1 * fc).toFixed(4) + ")";
     cn.setAttribute("aria-hidden", fw >= 0.5 ? "true" : "false");
-    cn.style.pointerEvents = fw > 0.5 ? "none" : "";
+    cn.style.pointerEvents = fw > 0.5 || zoomed ? "" : "none";
     if (fw > 0.5) unlift();
     const fCards = smooth(0.55, 0.88, z);
     cards.style.opacity = fCards.toFixed(3);
@@ -129,7 +149,7 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
     const ft = smooth(0.42, 0.62, z);
     aEls.forEach((el) => (el.style.opacity = (1 - ft).toFixed(3)));
     bEls.forEach((el) => (el.style.opacity = ft.toFixed(3)));
-    hint.style.opacity = dismissed ? 0 : clamp(1 - z * 4, 0, 1).toFixed(3);
+    hint.style.opacity = zoomed ? 0 : (dismissed ? 0 : clamp(1 - z * 4, 0, 1)).toFixed(3);
   }
 
   function tick(now) {
@@ -150,6 +170,7 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
 
   window.addEventListener("wheel", (e) => {
     e.preventDefault();
+    if (zoomed) { unzoom(); return; }
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
     nudge((e.deltaY * unit) / 380);
   }, { passive: false });
@@ -173,6 +194,7 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2 && pinchD > 0) {
+      if (zoomed) { unzoom(); pinchD = 0; return; }
       const [p1, p2] = [...pts.values()];
       const d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
       nudge(-(d / pinchD - 1) * 2.2);
@@ -180,7 +202,9 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
     } else if (dragY != null) {
       const dy = e.clientY - dragY;
       dragY = e.clientY;
-      if (dy !== 0) nudge(-dy / 260);
+      if (dy === 0) return;
+      if (zoomed) { unzoom(); return; }
+      nudge(-dy / 260);
     }
   });
 
@@ -200,11 +224,82 @@ body{background:var(--cream);display:grid;place-items:center;font-family:var(--s
   };
   cn.querySelectorAll(".cn-hit .hit").forEach((h) => {
     h.addEventListener("mouseenter", () => {
+      if (zoomed) return;
       unlift();
       const svg = pvByName.get(h.dataset.p);
       if (svg) { svg.classList.add("lift"); lifted = svg; }
     });
     h.addEventListener("mouseleave", unlift);
+    h.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const svg = pvByName.get(h.dataset.p);
+      if (svg) zoomTo(svg);
+    });
+  });
+
+  const cnStage = document.getElementById("cnStage");
+  const pops = document.getElementById("photoPops");
+  const popFigs = pops ? [...pops.querySelectorAll(".card")] : [];
+
+  function hidePop() {
+    popFigs.forEach((f) => f.classList.remove("on"));
+  }
+
+  function showPop(cardIdx, mk) {
+    const fig = popFigs[cardIdx];
+    if (!fig) return;
+    const r = mk.getBoundingClientRect();
+    const sr = stage.getBoundingClientRect();
+    const w = fig.offsetWidth || 170;
+    const hgt = fig.offsetHeight || 210;
+    let x = clamp(r.left + r.width / 2 - sr.left, w / 2 + 24, sr.width - w / 2 - 24);
+    let y = r.top - 16 - sr.top;
+    let below = false;
+    if (y - hgt < 10) { y = r.bottom - sr.top + 16; below = true; }
+    fig.style.left = x + "px";
+    fig.style.top = y + "px";
+    fig.style.transform = below ? "translate(-50%, 0)" : "translate(-50%, -100%)";
+    popFigs.forEach((f) => f.classList.toggle("on", f === fig));
+  }
+
+  function zoomTo(svg) {
+    if (zoomed === svg) return;
+    hidePop();
+    if (zoomed) zoomed.classList.remove("active");
+    unlift();
+    const cx = +svg.dataset.cx, cy = +svg.dataset.cy;
+    const w = +svg.dataset.w, h = +svg.dataset.h;
+    const box = cn.getBoundingClientRect();
+    const k = box.width / 1000;
+    const s = clamp(Math.min((0.82 * box.width) / (w * k), (0.74 * box.height) / (h * k)), 1.6, 3.4);
+    const dx = s * (box.width / 2 - cx * k);
+    const dy = s * (box.height / 2 - cy * k);
+    cnStage.style.transform = "translate(" + dx.toFixed(1) + "px," + dy.toFixed(1) + "px) scale(" + s.toFixed(3) + ")";
+    cnStage.classList.add("zoomed");
+    cn.querySelectorAll(".mks").forEach((g) => g.classList.toggle("on", g.dataset.p === svg.dataset.p));
+    svg.classList.add("active");
+    zoomed = svg;
+  }
+
+  function unzoom() {
+    hidePop();
+    cnStage.style.transform = "";
+    cnStage.classList.remove("zoomed");
+    cn.querySelectorAll(".mks.on").forEach((g) => g.classList.remove("on"));
+    if (zoomed) { zoomed.classList.remove("active"); zoomed = null; }
+  }
+
+  cn.querySelectorAll(".cn-markers .mk").forEach((mk) => {
+    mk.addEventListener("mouseenter", () => showPop(+mk.dataset.card, mk));
+    mk.addEventListener("mouseleave", hidePop);
+    mk.addEventListener("click", (e) => e.stopPropagation());
+  });
+
+  window.addEventListener("click", (e) => {
+    if (zoomed && !e.target.closest(".hit") && !e.target.closest(".mk")) unzoom();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && zoomed) unzoom();
   });
 
   apply();

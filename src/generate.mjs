@@ -4,7 +4,7 @@ import {
   decodeRings, splitAntimeridianRings, rasterizeLand, distanceField,
 } from "./geometry.mjs";
 import { sampleDots, DOT_SPACING, dotsToSvg, ridgeLineSvg, mixHex, clamp01, buildAccents, ensureComponentDots, ensureRingDots } from "./stipple.mjs";
-import { CARDS, CARDS_ENABLED, PLACES, RIDGES, renderCardsHtml } from "./content.mjs";
+import { CARDS, CARDS_ENABLED, PLACES, RIDGES, renderCardsHtml, renderPhotoPops } from "./content.mjs";
 import { buildChina } from "./china.mjs";
 import { renderPage } from "./template.mjs";
 
@@ -35,6 +35,7 @@ const chinaH = Math.round(china.proj.height * 100) / 100;
 const html = renderPage({
   mapH, dotSvg, ridgeSvg, accentSvg, cardsHtml, dotCount,
   china: { svg: china.svg, h: chinaH, dotCount: china.dots.length },
+  photoPops: renderPhotoPops(CARDS),
 });
 writeFileSync(new URL("../index.html", import.meta.url), html);
 

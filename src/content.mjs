@@ -108,6 +108,17 @@ export const CARDS = [
   },
 ];
 
+export function renderPhotoPops(cards) {
+  return cards
+    .map(
+      (c, i) =>
+        `<figure class="card pop" data-i="${i}" style="--w:13cqw;--rot:${c.rot}deg;--dur:${c.dur};--delay:${c.delay};--ar:${c.ar}">` +
+        `<div class="photo"><svg viewBox="${c.vb}" preserveAspectRatio="xMidYMid slice">${c.art}</svg></div>` +
+        `<figcaption>${c.caption}</figcaption></figure>`
+    )
+    .join("");
+}
+
 export function renderCardsHtml(cards) {
   return cards.map(
     (c) => `<figure class="card" style="left:${c.left}%;top:${c.top}%;--w:${c.w}%;--rot:${c.rot}deg;--dur:${c.dur};--delay:${c.delay};--ar:${c.ar}">` +
